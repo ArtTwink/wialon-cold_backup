@@ -1,0 +1,38 @@
+ #!/bin/bash
+
+ #cold backup from backup server
+
+ TIMESTAMP=$(date +%Y%m%d%H%M%S)
+
+ /home/wialon/backup_server/adf_script stop
+ #tar -czf storage${TIMESTAMP}.tar storage
+ /usr/bin/time -o /usr/local/bckp/scripts/logs/time_backup.log tar cf - /home/wialon/wlocal/storage | pv | pigz -9 -p 16 > /usr/local/bckp/temp/storage${TIMESTAMP}.tar.gz
+ if [ "$?" = "0" ]
+ then
+     file_new=`ls -t /usr/local/bckp/storage/storage*.tar.gz | head -n1`
+     file_old=`ls -t /usr/local/bckp/storage/storage*.tar.gz | tail -n1`
+     files_count=`ls -f /usr/local/bckp/storage/storage*.tar.gz | wc -l`
+     count=`findmnt -nblo use% -T /home/wialon/wlocal | awk '{print $1}' | sed '{s/.$//;}'`
+     min=90
+
+     if [ "$file_new" != "$file_old" ]
+     then
+         if [ "$count" -ge "$min"  ]
+         then
+             echo "The disk is full of more than 80%, Delete Old Files...."
+             rm $file_old
+             echo "File $file_old Delete"
+         elif [ "$files_count" -ge "6" ]
+         then
+             echo "More than 5 storage archive files detected, Delete Old Files...."
+                         rm $file_old
+                         echo "File $file_old Delete"
+         fi
+     fi
+ else
+     echo "Error while creating archive"
+ fi
+
+ /home/wialon/backup_server/adf_script start
+ scp -P44 /usr/local/bckp/temp/storage*.tar.gz arttwink@192.168.1.12:/usr/local/bckp/ded/storage
+ mv /usr/local/bckp/temp/storage*.tar.gz /usr/local/bckp/storage
